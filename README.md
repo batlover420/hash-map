@@ -3,7 +3,7 @@
 
 `HashMap` is an open-addressesed hash map written in C++ that offers dramatically improved performance over `std::unordered_map`. `<Key, Value>` pairs are stored densely in a contiguous array of raw memory `entries`, allowing for extremely fast iteration and immediate `Value` presence upon successful lookup. `Keys` hash into a separate, pre-initialized byte array `control` whose indices represent the status of a corresponding entry. Unoccupied indices hold values of `EMPTY = 0x80` and`TOMB = 0xFE`. Live indices hold a 7-bit `fingerprint` of the hashed `Key`. When performing lookups, `control` indices are 'cheaply validated' with a `fingerprint` comparison before attempting to fetch an entry to perform a more expensive `Key` comparison.
 
-In order to allow `entries` to remain as dense as possible, an intermediate byte array `ctoe` (control-to-entry) is used to store and access the indices of entries. `ctoe` has a 1:1 correspondance with `control`.
+In order to allow `entries` to remain as dense as possible, an intermediate byte array `ctoe` (control-to-entry) is used to store and access the indices of entries. `ctoe` has a 1:1 correspondance with `control`. A separate byte array `etoc` (entry-to-control) is used for bookkeeping during entry deletion.
 
 The capacity of `HashMap` must always be a power of 2. This allows hash indices to be determined by the extremely cheap operation `std::size_t index = hash & (capacity - 1)` as opposed to standard modular arithmetic.
 
@@ -52,16 +52,16 @@ The capacity of `HashMap` must always be a power of 2. This allows hash indices 
 
 `HashMap` has multiple restrictions placed on its implementation and usage. There are many features of generic C++ containers I do not yet understand the mechanics of, and instead of implementing these haphazardly, I prefer a more stable implementation with light restrictions. Ultimately, these restrictions do not amount to much, and will not impact most use cases, but they're still worth mentioning.
 
-- `Keys` and `Values` must be `nothrow move constructible`
+- `Keys` and `Values` must be 'nothrow move constructible'
     - `HashMap` does not know how to handle exceptions that occur doing relocation.
     - This property is held by all trivial types and `structs` whose only members are trivial types. 
 
-- `Values` must be `default constructible`
+- `Values` must be 'default constructible'
     - `HashMap` stores entries in an array of bytes that remain uninitialized until an insertion takes place. In order to insert an entry, a reference to a default-constructed `Value` must be returned to perform the assignment.
     - This property is held by all trivial types and `structs` whose only members are trivial types.
 
-- `Keys` must be `nothrow hashable`
-    - `HashMap` does not have a custom hashing algorithm and implements hashing via `std::hash`.
+- `Keys` must be 'noexcept hashable'
+    - `HashMap` does not have a custom hashing algorithm for complex types and implements hashing via `std::hash`.
     - This property is held by all trivial types.
 
 `HashMap` does not support custom memory allocators. This is a feature I was torn on implementing, but I ultimately do not trust my understanding of allocators enough to implement it as robustly as I would like.
@@ -77,7 +77,7 @@ I became inspired to work on `HashMap` while working on another project of mine,
 
 In retrospect, it makes sense that the SIMD implementation is not as strong: `EMPTY` & `TOMB` indices differentiate themselves from live indices with the most significant bit. Assembling 16 bytes into a group would naturally be more expensive than what often boiled down to just 16 bit comparisons.
 
-The techniques I learned from building `HashMap_16` alllowed me to hyper-optimize `HashMap`, so it wasn't a total waste. I'm including it here for documentation.
+The techniques I learned from building `HashMap_16` alllowed me to hyper-optimize `HashMap`, so it wasn't a complete time sink. I'm including it here to document the progress I've made.
 
 
 ## New to HashMaps? Here's a Rundown
@@ -86,13 +86,13 @@ The techniques I learned from building `HashMap_16` alllowed me to hyper-optimiz
 
 Constructs `HashMap` with a capacity equal to the minimum legal size that is greater than or equal to the provided argument. If no argument is provided, constructs `HashMap` with the minimum legal capacity (16).
 ```cpp
-HashMap<int, int> a;      // capacity = 16
+HashMap<int, int> a;      // capacity == 16
 
-HashMap<int, int> b(64);  // capacity = 64
+HashMap<int, int> b(64);  // capacity == 64
 
-HashMap<int, int> c(26);  // capacity = std::bit_ceil(26) == 32
+HashMap<int, int> c(26);  // capacity == std::bit_ceil(26) == 32
 
-HashMap<int, int> d(8);   // capacity = 16
+HashMap<int, int> d(8);   // capacity == 16
 ```
 ---
 
@@ -102,7 +102,7 @@ Copy-constructs `HashMap` from another `HashMap`. The copied `HashMap` is a perf
 ```cpp
 HashMap<int, int> a;
 
-...populate a
+// ...populate a
 
 HashMap<int, int> b(a);  // b is a perfect copy of a
 ```
@@ -114,13 +114,13 @@ Calls upon the copy constructor (above) to construct `HashMap` from another `Has
 ```cpp
 HashMap<int, int> a;
 
-...populate a
+// ...populate a
 
 HashMap<int, int> b;
 
-...populate b
+// ...populate b
 
-a = b;  // a now contains all elements from b
+a = b;  // a now contains all entries from b
 
 HashMap<std::uint16_t, std::uint16_t> c;
 
@@ -135,9 +135,8 @@ Returns a `Value` reference of the entry corresponding to the provided `Key`. Re
 HashMap<int, int> hash_map;
 
 hash_map[420] = 100;    // Default-constructs hash_map[420], assigns 100
-                        // for type int, default-value == 0
 
-int x = hash_map[420];  // x = 100
+int x = hash_map[420];  // x == 100
 ```
 ---
 
@@ -147,7 +146,7 @@ Clears all entries from a `HashMap` while preserving capacity.
 ```cpp
 HashMap<int, int> hash_map;
 
-...populate hash_map
+// ...populate hash_map
 
 hash_map.clear(); //hash_map is now empty
 ```
@@ -159,7 +158,7 @@ Attempts to resize `HashMap` to the bit ceiling of the provided argument. If the
 ```cpp
 HashMap<int, int> hash_map(128);
 
-...populate hash_map to 32 elements
+// ...populate hash_map to 32 elements
 
 hash_map.resize(32);    // too small, no resize occurs. returns false
 
@@ -175,15 +174,15 @@ Attempts to rresize `HashMap` to the minimum legal capacity. Returns `true` if a
 ```cpp
 HashMap<int, int> hash_map(256);
 
-hash_map[420] = 100;  // capacity = 256 with only one element. waste of space
+hash_map[420] = 100;  // capacity == 256 with only one element. waste of space
 
-hash_map.shrink();    // capacity = 16
+hash_map.shrink();    // capacity == 16
 ```
 ---
 
 ### `const Value& at(const Key& key)`
 
-Returns a `const Value` reference corresponding to the provided `Key`. If no such `Key` exists, throws `std::out_of_range.`
+Returns a `const Value` reference corresponding to the provided `Key`. Throws `std::out_of_range` if no such `Key` is found.
 ```cpp
 HashMap<int, int> hash_map;
 
@@ -191,7 +190,7 @@ int x = hash_map[420];  // x = default-constructed int
 
 hash_map[420] = 100;
 
-int y = hash_map.at(420);  // y = 100
+int y = hash_map.at(420);  // y == 100
 
 int z = hash_map.at(421);  // throws std::out_of_range
 ```
@@ -256,10 +255,39 @@ Returns `true` if `HashMap` contains no live entries. Returns `false` if `HashMa
 ```cpp
 HashMap<int, int> hash_map;
 
-bool x = hash_map.empty();  // x = true
+bool x = hash_map.empty();  // x == true
 
 hash_map[420] = 100;
 
-bool y = hash_map.empty();  // y = false
+bool y = hash_map.empty();  // y == false
 ```
 ---
+
+### Iteration
+
+Iterating over `HashMap` works almost identically to iterating over `std::unordered_map`. The `Iterator` returns references to `EntryRef` objects containing a `const& Key` in `first` and a `&Value` in `second`. There is also a `ConstIterator` that returns `ConstEntryRefs` containing `const& Key` in `first` and `const& Value` in `second`.
+
+```cpp
+HashMap<int, int> hash_map;
+
+// ...pupulate hash_map
+
+int key_sum = 0;
+int value_sum = 0;
+
+for (auto entry : hash_map {
+    key_sum += entry.first;     // Sums up all keys
+    value_sum += entry.second;  // Sums up all values
+
+    entry.second = 0;           // values can be modified directly. keys cannot
+}
+
+// There is also a const iterator
+
+for (const auto entry : hash_map) {
+    key_sum += entry.first;            
+    value_sum += entry.second;        // all values == 0 now, remember?
+}
+
+
+```
