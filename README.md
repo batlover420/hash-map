@@ -265,7 +265,7 @@ bool y = hash_map.empty();  // y == false
 
 ### Iteration
 
-Iterating over `HashMap` works almost identically to iterating over `std::unordered_map`. The `Iterator` returns references to `EntryRef` objects containing a `const& Key` in `first` and a `&Value` in `second`. There is also a `ConstIterator` that returns `ConstEntryRefs` containing `const& Key` in `first` and `const& Value` in `second`.
+Iterating over `HashMap` works almost identically to iterating over `std::unordered_map`. The `Iterator` returns references to `EntryRef` objects containing `const& Key` in `first` and `&Value` in `second`. There is also a `ConstIterator` that returns `ConstEntryRefs` containing `const& Key` in `first` and `const& Value` in `second`.
 
 ```cpp
 HashMap<int, int> hash_map;
@@ -275,7 +275,7 @@ HashMap<int, int> hash_map;
 int key_sum = 0;
 int value_sum = 0;
 
-for (auto entry : hash_map {
+for (auto entry : hash_map) {
     key_sum += entry.first;     // Sums up all keys
     value_sum += entry.second;  // Sums up all values
 
