@@ -1,13 +1,13 @@
 
 # HashMap
 
-`HashMap` is an open-addressesed hash map written in C++ that offers dramatically improved performance over `std::unordered_map`. `<Key, Value>` pairs are stored densely in a contiguous array of memory `entries`, allowing for extremely fast iteration and immediate `Value` presence upon successful lookup. `Keys` hash into a separate, pre-initialized byte array `control` whose indices represent the status of a corresponding entry. Dead indices hold values of `EMPTY = 0x80` and`TOMB = 0xFE`. Live indices hold a 7-bit `fingerprint` of the hashed `Key`. During lookup, an entry is only fetched from memory after the `fingerprint` of the argument `Key` has been successfully compared to that of the hashed index.
+`HashMap` is an open-addressesed hash map written in C++ that offers dramatically improved performance over `std::unordered_map`. `<Key, Value>` pairs are stored densely in a contiguous array of raw memory `entries`, allowing for extremely fast iteration and immediate `Value` presence upon successful lookup. `Keys` hash into a separate, pre-initialized byte array `control` whose indices represent the status of a corresponding entry. Unoccupied indices hold values of `EMPTY = 0x80` and`TOMB = 0xFE`. Live indices hold a 7-bit `fingerprint` of the hashed `Key`. When performing lookups, `control` indices are 'cheaply validated' with a `fingerprint` comparison before attempting to fetch an entry to perform a more expensive `Key` comparison.
 
 In order to allow `entries` to remain as dense as possible, an intermediate byte array `ctoe` (control-to-entry) is used to store and access the indices of entries. `ctoe` has a 1:1 correspondance with `control`.
 
 The capacity of `HashMap` must always be a power of 2. This allows hash indices to be determined by the extremely cheap operation `std::size_t index = hash & (capacity - 1)` as opposed to standard modular arithmetic.
 
-`HashMap` follows a 'dual load factor' system. A rehash will occur when the number of live + tomb entries exceeds 85% capacity, or when the number of tomb entries exceeds 30% capacity.
+`HashMap` implements a 'dual load factor' system. A rehash will occur when the number of live + `TOMB` entries exceeds 85% capacity, or when the number of `TOMB` entries exceeds 30% capacity.
 
 ## Benchmarks
 ![](benchmarks/benchmark.png)
@@ -15,13 +15,13 @@ The capacity of `HashMap` must always be a power of 2. This allows hash indices 
 `HashMap` was benchmarked against `std::unordered_map` under the following specifications:
 
     Iteration
-    | time, in ms, to perform n unique insertions into a pre-allocated map
+    | time, in ms, to perform n unique insertion operations on a pre-allocated map
 
     Erase
-    | time, in ms, to perform n unique erase operations on a map containing n elements
+    | time, in ms, to perform n unique erase operations on a map containing n entries
 
     Lookup
-    | time, in ms, to perform n unique lookup operations on a map containing n elements
+    | time, in ms, to perform n unique lookup operations on a map containing n entries
 
     Bad Lookup
     | time, in ms, to perform n unique lookup misses on a map containing n entries
@@ -36,11 +36,13 @@ The capacity of `HashMap` must always be a power of 2. This allows hash indices 
     | time, in ms, to clear all entries from a map containing n entries
 
 
+    Compiled w/ g++ -std=c++20 -o3 -DNDEBUG
 
     <Key, Value> pairs are of type <std::uint64_t, std::uint64_t>.
 
 
-    All values obtained from lookups or iteration are immediately used to prevent the compiler from discarding the operation.
+    All values obtained from lookups or iteration are immediately used to
+    prevent the compiler from discarding the operation.
 
 
     CPU: 13th Gen Intel(R) Core(TM) i9-13900K (16+16) @ 5.80HGz
@@ -82,7 +84,7 @@ The techniques I learned from building `HashMap_16` alllowed me to hyper-optimiz
 
 ### `HashMap(std::size_t initial_capacity = 16)`
 
-Constructs `HashMap` with a capacity corresponding to `std::bit_ceil(cap)`, where `cap` is the provided argument. If `cap < 16`, `HashMap` will be initialized to the minimum capacity. If no argument is provided, `HashMap` is initialized to the minimum capacity.
+Constructs `HashMap` with a capacity equal to the minimum legal size that is greater than or equal to the provided argument. If no argument is provided, constructs `HashMap` with the minimum legal capacity (16).
 ```cpp
 HashMap<int, int> a;      // capacity = 16
 
@@ -128,7 +130,7 @@ c = a;  // error
 
 ### `Value& operator[](const Key& key)`
 
-Returns a reference to the `Value` of the entry corresponding to the provided `Key`. Returns a default-constructed `Value` if the `Key` does not yet exist in `HashMap`.
+Returns a `Value` reference of the entry corresponding to the provided `Key`. Returns a default-constructed `Value` reference if the `Key` does not yet exist in `HashMap`.
 ```cpp
 HashMap<int, int> hash_map;
 
@@ -141,7 +143,7 @@ int x = hash_map[420];  // x = 100
 
 ### `void clear()`
 
-Clears all entries from a HashMap while preserving capacity.
+Clears all entries from a `HashMap` while preserving capacity.
 ```cpp
 HashMap<int, int> hash_map;
 
@@ -181,7 +183,7 @@ hash_map.shrink();    // capacity = 16
 
 ### `const Value& at(const Key& key)`
 
-Returns a `const` reference to the `Value` corresponding to the provided `Key`. If no such `Key` exists, throws `std::out_of_range.`
+Returns a `const Value` reference corresponding to the provided `Key`. If no such `Key` exists, throws `std::out_of_range.`
 ```cpp
 HashMap<int, int> hash_map;
 
@@ -215,7 +217,7 @@ if (hash_map.contains(421)) {
 
 ### `bool erase(const Key& key)`
 
-Attempts to delete the entry corresponding to the provided `Key`. Returns `true` if a corresponding entry was found and deleted. Returns `false` if no deletion occurred (no such entry exists).
+Attempts to delete the entry corresponding to the provided `Key`. Returns `true` if a deletion occurred. Returns `false` if no deletion occurred (no such entry exists).
 ```cpp
 HashMap<int, int> hash_map;
 
@@ -229,7 +231,7 @@ hash_map.erase(421);  // Returns false
 
 ### `std::size_t size()`
 
-Returns the currernt number of live entries within the `HashMap`.
+Returns the currernt number of live entries in `HashMap`.
 ```cpp
 HashMap<int, int> hash_map;
 
