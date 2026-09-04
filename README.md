@@ -10,7 +10,7 @@ The capacity of `HashMap` must always be a power of 2. This allows hash indices 
 `HashMap` follows a 'dual load factor' system. A rehash will occur when the number of live + tomb entries exceeds 85% capacity, or when the number of tomb entries exceeds 30% capacity.
 
 ## Benchmarks
-![alt text](u_versus_h.png)
+![](benchmarks/benchmark.png)
 
 `HashMap` was benchmarked against `std::unordered_map` under the following specifications:
 
@@ -67,7 +67,7 @@ The capacity of `HashMap` must always be a power of 2. This allows hash indices 
 
 ## A Tangent: `HashMap_16`
 
-![alt text](u_versus_h_versus_h16.png)
+![](benchmarks/benchmark_incl_16.png)
 
 I became inspired to work on `HashMap` while working on another project of mine, `ascii-terminal`. I needed a data structure with incredibly fast iteration & lookup time and didn't want to build a one-off container, so I decided to build a hash map that I would be able to reuse later.
 
