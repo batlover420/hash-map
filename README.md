@@ -1,24 +1,26 @@
 
 # HashMap
 
-`HashMap` is an open-addressesed hash map written in C++ that offers dramatically improved performance over `std::unordered_map`. `<Key, Value>` pairs are stored densely in a contiguous array of memory `entries`, allowing for extremely fast iteration and immediate `Value` presence upon successful lookup. `Keys` hash into a separate, pre-initialized byte array `control` whose indices represent the status of a corresponding entry. Dead indices hold values of `EMPTY = 0x80` and`TOMB = 0xFE`. Live indices hold a 7-bit `fingerprint` of the hashed `Key`. During lookup, an entry is only fetched from memory after the `fingerprint` of the argument `Key` has been successfully compared to that of the hashed index.
+`HashMap` is an open-addressesed hash map written in C++ that offers dramatically improved performance over `std::unordered_map`. `<Key, Value>` pairs are stored densely in a contiguous array of memory `entries`, allowing for extremely fast iteration and immediate `Value` presence upon successful lookup. `Keys` hash into a separate, pre-initialized byte array `control` whose indices represent the status of a corresponding entry. Empty and dead indices hold values of `EMPTY = 0x80` and `TOMB = 0xFE`. Live indices hold a 7-bit `fingerprint` of the hashed `Key`. During lookup, an entry is only fetched from memory after the `fingerprint` of the argument `Key` has been successfully compared to that of the hashed index.
 
-In order to allow `entries` to remain as dense as possible, an intermediate byte array `ctoe` (control-to-entry) is used to store and access the indices of entries. `ctoe` has a 1:1 correspondance with `control`.
+The capacity of `HashMap` must always be a power of 2. This allows hash indices to be determined by the extremely cheap operation `hash & (capacity - 1)` as opposed to standard modular arithmetic.
+
+In order to allow `entries` to remain as dense as possible, an intermediate byte array `ctoe` (control-to-entry) is used to store and access the indices of entries. `ctoe` has a 1:1 correspondance with `control`. Below is a diagram of a standard lookup operation.
 
 ![](benchmarks/flow.png)
 
-The capacity of `HashMap` must always be a power of 2. This allows hash indices to be determined by the extremely cheap operation `std::size_t index = hash & (capacity - 1)` as opposed to standard modular arithmetic.
+`HashMap` follows a 'dual load factor' system. A rehash will occur when the number of live + dead entries exceeds 85% capacity, or when the number of dead entries exceeds 30% capacity.
 
-`HashMap` follows a 'dual load factor' system. A rehash will occur when the number of live + tomb entries exceeds 85% capacity, or when the number of tomb entries exceeds 30% capacity.
-
-## Benchmarks
+## Benchmark
 
 ![](benchmarks/benchmark.png)
 
-`HashMap` was benchmarked against `std::unordered_map` under the following specifications:
+### Benchmark Specifications:
+
+    n = 1'000'000
 
     Iteration
-    | time, in ms, to perform n unique insertions into a pre-allocated map
+    | time, in ms, to insert n unique entries into a pre-allocated map
 
     Erase
     | time, in ms, to perform n unique erase operations on a map containing n elements
@@ -74,11 +76,11 @@ The capacity of `HashMap` must always be a power of 2. This allows hash indices 
 
 I became inspired to work on `HashMap` while working on another project of mine, `ascii-terminal`. I needed a data structure with incredibly fast iteration & lookup time and didn't want to build a one-off container, so I decided to build a hash map that I would be able to reuse later.
 
-` HashMap_16` was the result of my first attempt at creating a hash map. Instead of storing entries as densely as possible, it utilizes SIMD architecture (Single-Instruction, Multiple-Data) to process 16 `control` indices at a time. While this was still substantially faster than `std::unordered_map`, its iteration speed was almost identical, which was the main operation I was trying to improve. Additional testing led me to conclude that `control` indices are so fast to process that it was actually more expensive to prepare the SIMD group than to just process the indices sequentially. I assumed it would at least offer stronger results in maps that are more sparsely populated, but that is not the case. `std::unordered_map` iterates through itself by following a direct chain of pointers between `Nodes`. I realized the only way I was going to beat that speed was to iterate directly over entries stored in contiguous memory; which is exactly how `HashMap` is implemented.
+` HashMap_16` was the result of my first attempt. It implemented SIMD architecture (Single-Instruction, Multiple-Data) to process 16 `control` indices at a time, but did not store entries as densely as the current implementation. While this stil offered improved performance over `std::unordered_map`, iteration speeds were almost identical, which caused me to rethink my approach. Additional testing led me to conclude that `control` indices are so fast to process that it was typically more expensive to prepare the index group than to just process the indices sequentially. I assumed it would at least offer stronger results in maps that are more sparsely populated, but that was not the case. `std::unordered_map` iterates through itself by following a direct chain of pointers between its nodes, and I realized the only way I was going to beat that kind of speed was to store all entries contiguously.
 
-In retrospect, it makes sense that the SIMD implementation is not as strong: `EMPTY` & `TOMB` indices differentiate themselves from live indices with the most significant bit. Assembling 16 bytes into a group would naturally be more expensive than what often boiled down to just 16 bit comparisons.
+In retrospect, it makes sense that the SIMD implementation is not as strong: `EMPTY` & `TOMB` indices differentiate themselves from live indices with the most significant bit. Assembling 16 bytes into a group would naturally be more expensive than what was often just 16 bit comparisons.
 
-The techniques I learned from building `HashMap_16` alllowed me to hyper-optimize `HashMap`, so it wasn't a total waste. I'm including it here for documentation.
+I'm including `HashMap_16` not only to document my progress, but because I think it is a much more interesting approach. The techniques I learned from building `HashMap_16` alllowed me to hyper-optimize `HashMap`, so it wasn't a total waste.
 
 
 ## New to HashMaps? Here's a Rundown
