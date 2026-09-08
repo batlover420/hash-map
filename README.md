@@ -164,11 +164,11 @@ HashMap<int, int> hash_map(128);
 
 ...populate hash_map to 32 elements
 
-hash_map.resize(32);    // too small, no resize occurs. returns false
+hash_map.allocate(32);    // too small, no resize occurs. returns false
 
-hash_map.resize(50);    // resizes to std::bit_ceil(50) == 64
+hash_map.allocate(50);    // resizes to std::bit_ceil(50) = 64
 
-hash_map.resize(1024);  // resize can also be used to allocate space
+hash_map.allocate(1024);  // resize can also be used to allocate space
 ```
 ---
 
