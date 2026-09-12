@@ -19,7 +19,7 @@ In order to allow `entries` to remain as dense as possible, an intermediate byte
 
     n = 1'000'000
 
-    Iteration
+    Insertion
     | time, in ms, to insert n unique entries into a pre-allocated map
 
     Erase
